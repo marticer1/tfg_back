@@ -1,0 +1,8 @@
+# Core dependencies for stn_core.py and partition modules
+numpy>=1.21.0
+scipy>=1.7.0
+treap>=0.999
+
+# Flask server dependencies (only needed for stn_server.py)
+flask>=2.0.0
+flask-cors>=3.0.10

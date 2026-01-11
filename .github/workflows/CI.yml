@@ -1,0 +1,94 @@
+name: CI Pipeline
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches:
+      - 'main'
+      - 'develop'
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build (no tests)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build with Maven (skip tests)
+        run: mvn --batch-mode --update-snapshots -DskipTests package
+
+  tests:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Run Tests with JaCoCo
+        run: mvn --batch-mode --update-snapshots clean verify
+
+      - name: Upload test and coverage artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: target/
+
+  coverage:
+    name: Coverage Check
+    needs: tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Download test and coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: test-results
+          path: target/
+
+      - name: Run Coverage Check
+        run: mvn jacoco:check -Pcoverage-check
+
+      - name: Extract multiple coverage metrics
+        run: |
+          export JACOCO_XML="$GITHUB_WORKSPACE/target/site/jacoco/jacoco.xml"
+          python3 scripts/extract_coverage.py > /tmp/coverage_out.txt
+          
+          cat /tmp/coverage_out.txt >> "$GITHUB_OUTPUT"
+          
+          # Crear summary bonito
+          {
+            echo "## 📊 Coverage Report"
+            echo ""
+            echo "| Métrica       | Cobertura |"
+            echo "|--------------:|----------:|"
+            awk -F= '{printf("| %-12s | %s%% |\n", $1, $2)}' /tmp/coverage_out.txt
+          } >> "$GITHUB_STEP_SUMMARY"
